@@ -1,8 +1,10 @@
-require("dotenv").config();
+// server.js - VERSÃO FINAL E CORRIGIDA
+
+require("dotenv").config(); // Carrega as variáveis do arquivo .env
 
 const express = require("express");
 const cors = require("cors");
-const bcrypt = require("bcryptjs");
+const bcrypt = require("bcryptjs"); // Usando bcryptjs para maior compatibilidade
 const jwt = require("jsonwebtoken");
 const multer = require("multer");
 const path = require("path");
@@ -31,7 +33,7 @@ mongoose
     console.error("Não foi possível conectar ao MongoDB...", err)
   );
 
-//  CONFIGURAÇÃO DO MULTER
+// CONFIGURAÇÃO DO MULTER
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, "uploads/"),
   filename: (req, file, cb) =>
@@ -39,7 +41,7 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage: storage });
 
-// ROTAS DA API
+//  ROTAS DA API
 
 // Rota de Registro
 app.post("/api/register", async (req, res) => {
@@ -62,6 +64,7 @@ app.post("/api/register", async (req, res) => {
 
     res.status(201).json({ message: "Usuário registrado com sucesso!" });
   } catch (error) {
+    console.error("ERRO NO REGISTRO:", error);
     res.status(500).json({
       message: "Erro no servidor ao registrar.",
       error: error.message,
@@ -86,6 +89,7 @@ app.post("/api/login", async (req, res) => {
       user: { name: user.name },
     });
   } catch (error) {
+    console.error("ERRO NO LOGIN:", error);
     res.status(500).json({ message: "Erro no servidor ao fazer login." });
   }
 });
@@ -105,6 +109,7 @@ app.post("/api/products", upload.single("image"), async (req, res) => {
     await product.save();
     res.status(201).json(product);
   } catch (error) {
+    console.error("ERRO AO CRIAR PRODUTO:", error);
     res
       .status(500)
       .json({ message: "Erro ao criar produto.", error: error.message });
@@ -122,20 +127,25 @@ app.get("/api/products", async (req, res) => {
   }
 });
 
-//  MIDDLEWARE DE AUTENTICAÇÃO
+// MIDDLEWARE DE AUTENTICAÇÃO
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers["authorization"];
   const token = authHeader && authHeader.split(" ")[1];
-  if (token == null) return res.sendStatus(401);
+
+  if (token == null) {
+    return res.status(401).json({ message: "Token não fornecido." });
+  }
 
   jwt.verify(token, JWT_SECRET, (err, payload) => {
-    if (err) return res.sendStatus(403);
+    if (err) {
+      return res.status(403).json({ message: "Token inválido ou expirado." });
+    }
     req.userId = payload.userId;
     next();
   });
 };
 
-//  ROTAS PROTEGIDAS
+// ROTAS PROTEGIDAS
 
 // Rota para buscar informações do perfil
 app.get("/api/profile", authenticateToken, async (req, res) => {
@@ -145,10 +155,23 @@ app.get("/api/profile", authenticateToken, async (req, res) => {
       return res.status(404).json({ message: "Usuário não encontrado." });
     res.json(user);
   } catch (error) {
+    console.error("ERRO AO BUSCAR PERFIL:", error);
     res.status(500).json({ message: "Erro ao buscar perfil." });
   }
 });
-
+// Rota para buscar os pedidos do usuário (A ROTA QUE FALTAVA)
+app.get("/api/orders", authenticateToken, async (req, res) => {
+  try {
+    // Busca no banco de dados todos os pedidos que pertencem ao usuário logado
+    const userOrders = await Order.find({ userId: req.userId }).sort({
+      date: -1,
+    });
+    res.status(200).json(userOrders);
+  } catch (error) {
+    console.error("ERRO AO BUSCAR PEDIDOS:", error);
+    res.status(500).json({ message: "Erro ao buscar pedidos do usuário." });
+  }
+});
 // Rota para criar um novo pedido
 app.post("/api/orders", authenticateToken, async (req, res) => {
   try {
@@ -164,6 +187,8 @@ app.post("/api/orders", authenticateToken, async (req, res) => {
     await order.save();
     res.status(201).json({ message: "Pedido realizado com sucesso!", order });
   } catch (error) {
+    //estava com um erro muito chato de resolver em que os pedidos sumiam, deixei essa parte para esclarecimento
+    console.error("ERRO DETALHADO AO CRIAR PEDIDO:", error);
     res.status(500).json({ message: "Erro ao criar pedido." });
   }
 });
